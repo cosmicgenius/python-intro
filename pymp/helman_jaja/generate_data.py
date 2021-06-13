@@ -1,5 +1,5 @@
 import numpy as np
-N = 262144
+N = 16777216
 
 arr = np.arange(N)
 np.random.shuffle(arr)

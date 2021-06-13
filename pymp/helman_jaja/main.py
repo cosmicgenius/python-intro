@@ -33,7 +33,7 @@ def fast(head, successor):
     sublists = len(sublist_head)
         
     partial_ranking = pymp.shared.array((N,), dtype=int)
-    parent_sublist = pymp.shared.list([None] * N)
+    parent_sublist = pymp.shared.array((N,), dtype=int) # sublist index + 1
     stop = [None] * N
 
     sublist_length = pymp.shared.array((sublists,), dtype=int)
@@ -52,7 +52,7 @@ def fast(head, successor):
 
             while current_idx != -1 and (current_idx == sublist_head[sl_idx] or not stop[current_idx]):
                 partial_ranking[current_idx] = rank
-                parent_sublist[current_idx] = sl_idx
+                parent_sublist[current_idx] = sl_idx + 1
 
                 rank += 1
                 current_idx = successor[current_idx]
@@ -62,6 +62,7 @@ def fast(head, successor):
                 sublist_succ[sl_idx] = -1
             else:
                 sublist_succ[sl_idx] = head_to_sublist[current_idx]
+    print (1.5)
 
     # shared variables
     # 1. do not work in different mp instances
@@ -79,7 +80,7 @@ def fast(head, successor):
     print(1)
     with pymp.Parallel(4) as p:
         for i in p.range(N):
-            ranking[i] = sublist_offset_abs[parent_sublist[i]] + partial_ranking[i]
+            ranking[i] = sublist_offset_abs[parent_sublist[i] - 1] + partial_ranking[i]
     print(2)
 
     return list(ranking)
