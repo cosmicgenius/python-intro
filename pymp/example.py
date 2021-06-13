@@ -21,4 +21,3 @@ with pymp.Parallel(4) as p:
 
 print(f'slow: {timeit(slow, number=100)}')
 print(f'fast: {timeit(slow, number=100)}')
-
