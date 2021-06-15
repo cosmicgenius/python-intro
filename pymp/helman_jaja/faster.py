@@ -3,8 +3,18 @@
 # Implementation: https://downey.io/blog/helman-jaja-list-ranking-explained/
 
 from timeit import timeit
+from datetime import datetime
 import pymp
 import numpy as np
+
+def fast_choice(N, M):
+    res = set()
+
+    while len(res) < M:
+        for r in np.random.rand(M):
+            res.add(int(r * N))
+
+    return list(res)
 
 def slow(head, successor):
     # Process data
@@ -21,9 +31,9 @@ def slow(head, successor):
 def fast(head, successor):
     # Process data
     N = len(successor)
-    heads = 40
+    heads = 400
 
-    sublist_head = list(np.random.choice(range(N), heads, replace=False))
+    sublist_head = fast_choice(N, heads)
     if not head in sublist_head:
         sublist_head.append(head)
 
@@ -32,60 +42,59 @@ def fast(head, successor):
 
     sublists = len(sublist_head)
         
-    print(0)
+    print(0, datetime.now().time())
 
-    partial_ranking = pymp.shared.array((N,), dtype=int)
     parent_sublist = pymp.shared.array((N,), dtype=int) # sublist index + 1
-    stop = [None] * N
+    stop = { -1: True }
 
     sublist_length = pymp.shared.array((sublists,), dtype=int)
     sublist_succ = pymp.shared.array((sublists,), dtype=int)
     
     ranking = pymp.shared.array((N,), dtype=int)
 
-    for head in sublist_head:
+    for sl_idx, head in enumerate(sublist_head):
         stop[head] = True
+        parent_sublist[head] = sl_idx
 
-    print(1)
+    print(1, datetime.now().time())
     with pymp.Parallel(4) as p:
         for sl_idx in p.range(sublists):
-            current_idx = sublist_head[sl_idx]
-            rank = 0
+            current_idx = successor[sublist_head[sl_idx]]
 
-            while current_idx != -1 and (current_idx == sublist_head[sl_idx] or not stop[current_idx]):
-                partial_ranking[current_idx] = rank
-                parent_sublist[current_idx] = sl_idx + 1
+            for rank in range(1, N):
+                if stop.get(current_idx) != None:
+                    sublist_length[sl_idx] = rank
+                    break
 
-                rank += 1
+                ranking[current_idx] = rank
+                parent_sublist[current_idx] = sl_idx
+
                 current_idx = successor[current_idx]
-                
-            sublist_length[sl_idx] = rank
-            if current_idx == -1:
-                sublist_succ[sl_idx] = -1
-            else:
-                sublist_succ[sl_idx] = head_to_sublist[current_idx]
-    print(2)
+
+            sublist_succ[sl_idx] = -1 if current_idx == -1 else head_to_sublist.get(current_idx) 
+    
+    print(2, datetime.now().time())
 
     # shared variables
     # 1. do not work in different mp instances
     # and 2. are far slower than normal ones
     # so we convert them here
     sublist_offset_abs = [0] * sublists
-    parent_sublist = list(parent_sublist)
-    partial_ranking = list(partial_ranking)
 
     current_sl = head_to_sublist[head]
     while sublist_succ[current_sl] != -1:
         sublist_offset_abs[sublist_succ[current_sl]] = sublist_offset_abs[current_sl] + sublist_length[current_sl]
         current_sl = sublist_succ[current_sl]
 
-    print(3)
+    print(3, datetime.now().time())
+
     with pymp.Parallel(4) as p:
         for i in p.range(N):
-            ranking[i] = sublist_offset_abs[parent_sublist[i] - 1] + partial_ranking[i]
-    print(4)
+            ranking[i] += sublist_offset_abs[parent_sublist[i]]
 
-    return list(ranking)
+    print(4, datetime.now().time())
+
+    return ranking
         
 
 with open('data.txt') as f:
@@ -109,9 +118,14 @@ with open('data.txt') as f:
     answers = []
 
     print('start')
+    
+    t_fast = timeit(lambda: answers.append(fast(head, successor)), setup='from __main__ import answers', number=1)
+    print("Fast (4 processors):", t_fast)
 
-    print("Fast (4 processors):", timeit(lambda: answers.append(fast(head, successor)), setup='from __main__ import answers', number=1))
-    print("Slow (single processor):", timeit(lambda: answers.append(slow(head, successor)), setup='from __main__ import answers', number=1))
+    t_slow = timeit(lambda: answers.append(slow(head, successor)), setup='from __main__ import answers', number=1)
+    print("Slow (single processor):", t_slow)
+    
+    print("Fast was", "faster" if t_fast < t_slow else "slower", "than slow by:", f"{np.sign(t_fast - t_slow) * (t_fast / t_slow - 1) * 100}%")
 
     ans_slow = answers[0]
     ans_fast = answers[1]
